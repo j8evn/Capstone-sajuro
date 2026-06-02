@@ -75,16 +75,23 @@ public class SajuCalculator {
      * Month 1 starts at 입춘 (~Feb 4), Month 2 at 경칩 (~Mar 6), etc.
      */
     private int determineSajuMonth(int month, int day) {
-        int dayOfYear = LocalDate.of(2000, month, day).getDayOfYear(); // use a non-leap year for consistency
+        int dayOfYear = LocalDate.of(2001, month, day).getDayOfYear(); // 2001: non-leap year for consistency
         int[] termDays = SajuConstants.SOLAR_TERM_MONTH_START_DAYS;
 
-        // Check from month 12 backward to month 1
-        // Month 12 (丑月) starts at 소한 (~Jan 6) — wraps around
+        // 소한(~Jan 6) 이전 → 12월 (丑月)
+        if (dayOfYear < termDays[11]) {
+            return 12;
+        }
+        // 소한 ~ 입춘 사이 → 12월 (丑月)
         if (dayOfYear < termDays[0]) {
-            return 12; // Before 입춘 = still month 12 (丑月)
+            return 12;
+        }
+        // 대설(~Dec 7) 이후 → 11월 (子月)
+        if (dayOfYear >= termDays[10]) {
+            return 11;
         }
 
-        for (int i = 10; i >= 0; i--) {
+        for (int i = 9; i >= 0; i--) {
             if (dayOfYear >= termDays[i]) {
                 return i + 1;
             }

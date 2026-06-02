@@ -141,7 +141,8 @@ public class SajuAnalyzer {
                 .orElse(dayMasterElement);
 
         if (strongest != dayMasterElement) {
-            keywords.addAll(ELEMENT_PERSONALITY.getOrDefault(strongest, List.of()).subList(0, 2));
+            var extraKeywords = ELEMENT_PERSONALITY.getOrDefault(strongest, List.of());
+            keywords.addAll(extraKeywords.subList(0, Math.min(2, extraKeywords.size())));
         }
 
         return keywords;
