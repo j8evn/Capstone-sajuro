@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 사주로 — Frontend
 
-## Getting Started
+Next.js 15 (App Router) 기반 모바일 퍼스트 웹 UI
 
-First, run the development server:
+## 기술 스택
+
+- **Framework**: Next.js 15 (TypeScript, App Router)
+- **Styling**: Vanilla CSS (글래스모피즘 다크 테마)
+- **API 통신**: Fetch API → Spring Boot 백엔드 (`localhost:8080`)
+
+## 실행
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 에서 확인
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 페이지 구조
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| 경로 | 설명 |
+|------|------|
+| `/` | 랜딩 페이지 (온보딩) |
+| `/input` | 사주 입력 폼 (생년월일시) |
+| `/result` | 사주 분석 결과 (명반, 오행 차트, 운세) |
+| `/context` | 기분/상황 선택 (날씨 카드 + 이모지 기분) |
+| `/recommendations` | 맞춤 추천 결과 (장소 카드 + 점수 분석) |
 
-## Learn More
+## 환경 변수
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | 백엔드 API 주소 |
