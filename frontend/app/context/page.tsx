@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
 import type { ApiResponse, WeatherData, RecommendResponse, SajuRequest } from '@/types/saju';
-import { MOODS, getWeatherEmoji, getElementClass } from '@/types/saju';
+import { MOODS } from '@/types/saju';
+import MoodSelector from '@/components/MoodSelector';
+import WeatherCard from '@/components/WeatherCard';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function ContextPage() {
   const router = useRouter();
@@ -16,21 +19,19 @@ export default function ContextPage() {
   const [location, setLocation] = useState({ lat: 37.5665, lon: 126.978 });
 
   useEffect(() => {
-    // Check for stored saju profile
     const stored = sessionStorage.getItem('sajuRequest');
     if (!stored) {
       router.push('/input');
       return;
     }
 
-    // Try to get user location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
           fetchWeather(pos.coords.latitude, pos.coords.longitude);
         },
-        () => fetchWeather(37.5665, 126.978), // Default: Seoul
+        () => fetchWeather(37.5665, 126.978),
         { timeout: 5000 }
       );
     } else {
@@ -48,7 +49,6 @@ export default function ContextPage() {
         setWeather(res.data);
       }
     } catch {
-      // Use mock weather if API fails
       setWeather({
         city: '서울',
         temperature: 22.5,
@@ -105,7 +105,7 @@ export default function ContextPage() {
     <div className="page">
       <div className="container">
         <div className="page-header">
-          <h1 className="page-title animate-fade-in-up stagger-1">기분 & 상황</h1>
+          <h1 className="page-title animate-fade-in-up stagger-1">기분 &amp; 상황</h1>
           <p className="page-subtitle animate-fade-in-up stagger-2">
             지금의 기분과 상황을 알려주세요
           </p>
@@ -121,21 +121,7 @@ export default function ContextPage() {
               <p className="loading-text">날씨 정보를 불러오는 중...</p>
             </div>
           ) : weather ? (
-            <div className="weather-card">
-              <div className="weather-icon">{getWeatherEmoji(weather.main)}</div>
-              <div className="weather-info">
-                <div className="weather-temp">{Math.round(weather.temperature)}°</div>
-                <div className="weather-desc">{weather.description} · {weather.city}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span className={`element-badge ${getElementClass(weather.elementMapping)}`}>
-                  {weather.elementMapping}
-                </span>
-                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                  외출 {weather.outdoorScore}점
-                </div>
-              </div>
-            </div>
+            <WeatherCard weather={weather} />
           ) : null}
         </section>
 
@@ -144,18 +130,11 @@ export default function ContextPage() {
           <h2 className="section-title">
             <span className="section-title-icon">💭</span> 지금 기분은?
           </h2>
-          <div className="mood-grid">
-            {MOODS.map((mood) => (
-              <button
-                key={mood.id}
-                className={`mood-item ${selectedMood === mood.id ? 'selected' : ''}`}
-                onClick={() => setSelectedMood(mood.id)}
-              >
-                <span className="mood-emoji">{mood.emoji}</span>
-                <span className="mood-label">{mood.label}</span>
-              </button>
-            ))}
-          </div>
+          <MoodSelector
+            moods={MOODS}
+            selected={selectedMood}
+            onSelect={setSelectedMood}
+          />
         </section>
 
         {/* Error */}
@@ -176,6 +155,7 @@ export default function ContextPage() {
         {/* CTA */}
         <section style={{ textAlign: 'center', padding: 'var(--space-xl) 0 var(--space-3xl)' }}>
           <button
+            id="btn-find-places"
             className="btn btn-primary btn-lg"
             disabled={!selectedMood || loading}
             onClick={handleRecommend}
