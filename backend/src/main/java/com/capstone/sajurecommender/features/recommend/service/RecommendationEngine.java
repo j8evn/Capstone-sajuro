@@ -3,6 +3,7 @@ package com.capstone.sajurecommender.features.recommend.service;
 import com.capstone.sajurecommender.features.recommend.data.PlaceData;
 import com.capstone.sajurecommender.features.recommend.data.PlaceData.Place;
 import com.capstone.sajurecommender.features.recommend.dto.RecommendResponse.*;
+import com.capstone.sajurecommender.features.recommend.service.ContextEngine.ContextVector;
 import com.capstone.sajurecommender.features.saju.domain.FourPillars;
 import com.capstone.sajurecommender.features.saju.domain.SajuConstants;
 import com.capstone.sajurecommender.features.saju.domain.SajuConstants.Element;
@@ -13,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,6 +33,7 @@ public class RecommendationEngine {
 
     private final PlaceData placeData;
     private final SajuAnalyzer sajuAnalyzer;
+    private final ContextEngine contextEngine;
     private final GeminiAiService geminiAiService;
 
     private static final double WEIGHT_SAJU = 0.35;
@@ -68,9 +69,9 @@ public class RecommendationEngine {
             String category,
             int maxResults) {
 
-        Element neededElement = sajuAnalyzer.getNeededElement(pillars);
-        Element weatherElement = Element.valueOf(
-                mapKoreanToElementName(weather.getElementMapping()));
+        // ContextEngine으로부터 통합 상황 벡터 획득
+        ContextVector ctx = contextEngine.buildContext(pillars, mood, weather);
+        Element weatherElement = Element.valueOf(mapKoreanToElementName(ctx.weatherElementKorean()));
 
         List<Place> places = placeData.getAllPlaces();
 
@@ -82,7 +83,7 @@ public class RecommendationEngine {
         }
 
         List<PlaceRecommendation> recommendations = places.stream()
-                .map(place -> scorePlaceAndBuild(place, pillars, neededElement, weatherElement, mood, weather))
+                .map(place -> scorePlaceAndBuild(place, ctx, weatherElement, weather))
                 .sorted(Comparator.comparingInt(PlaceRecommendation::getMatchScore).reversed())
                 .limit(maxResults)
                 .collect(Collectors.toList());
@@ -92,7 +93,7 @@ public class RecommendationEngine {
             PlaceRecommendation rec = recommendations.get(i);
             String aiReason = geminiAiService.generateRecommendationReason(
                     rec.getName(), rec.getCategory(), rec.getDescription(),
-                    neededElement, Element.valueOf(mapKoreanToElementName(
+                    ctx.neededElement(), Element.valueOf(mapKoreanToElementName(
                             placeData.getAllPlaces().stream()
                                     .filter(p -> p.getId().equals(rec.getId()))
                                     .findFirst()
@@ -104,30 +105,31 @@ public class RecommendationEngine {
             }
         }
 
-        log.info("Generated {} recommendations for mood={}, neededElement={}, aiEnabled={}",
-                recommendations.size(), mood, neededElement.getKorean(), geminiAiService.isAiEnabled());
+        log.info("Generated {} recommendations for mood={}, neededElement={}, time={}, aiEnabled={}",
+                recommendations.size(), mood, ctx.neededElement().getKorean(),
+                ctx.timeOfDay(), geminiAiService.isAiEnabled());
 
         return recommendations;
     }
 
     private PlaceRecommendation scorePlaceAndBuild(
-            Place place, FourPillars pillars, Element neededElement,
-            Element weatherElement, String mood, WeatherResponse weather) {
+            Place place, ContextVector ctx,
+            Element weatherElement, WeatherResponse weather) {
 
         // 1. Saju Score (35%): How well the place's elements match the person's needs
-        int sajuScore = calculateSajuScore(place, neededElement, pillars);
+        int sajuScore = calculateSajuScore(place, ctx.neededElement(), ctx.dayMasterElement());
 
         // 2. Weather Score (20%): How suitable the place is for current weather
         int weatherScore = calculateWeatherScore(place, weather, weatherElement);
 
         // 3. Mood Score (25%): How well the place matches the current mood
-        int moodScore = calculateMoodScore(place, mood);
+        int moodScore = calculateMoodScore(place, ctx.mood());
 
         // 4. Time Score (10%): How appropriate the place is for current time
-        int timeScore = calculateTimeScore(place);
+        int timeScore = calculateTimeScore(place, ctx.currentHour());
 
-        // 5. Congestion Score (10%): Mock congestion estimation
-        int congestionScore = calculateCongestionScore(place);
+        // 5. Congestion Score (10%): Mock congestion estimation from ContextEngine
+        int congestionScore = calculateCongestionScore(place, ctx.congestionLevel());
 
         int totalScore = (int) Math.round(
                 sajuScore * WEIGHT_SAJU +
@@ -138,7 +140,7 @@ public class RecommendationEngine {
         );
         totalScore = Math.max(10, Math.min(99, totalScore));
 
-        String reasonText = generateReasonText(place, neededElement, mood, sajuScore, moodScore);
+        String reasonText = generateReasonText(place, ctx.neededElement(), ctx.mood(), sajuScore, moodScore);
 
         List<MenuItemInfo> menuInfos = place.getMenuItems().stream()
                 .map(mi -> MenuItemInfo.builder()
@@ -176,7 +178,7 @@ public class RecommendationEngine {
                 .build();
     }
 
-    private int calculateSajuScore(Place place, Element neededElement, FourPillars pillars) {
+    private int calculateSajuScore(Place place, Element neededElement, Element dayMasterElement) {
         int score = 50;
 
         // Direct match: place's primary element matches needed element
@@ -192,8 +194,7 @@ public class RecommendationEngine {
             score += 15;
         }
         // Penalty: place element overcomes day master's element
-        Element dayMasterEl = pillars.dayMaster().getElement();
-        if (SajuConstants.getOvercoming(place.getPrimaryElement()) == dayMasterEl) {
+        if (SajuConstants.getOvercoming(place.getPrimaryElement()) == dayMasterElement) {
             score -= 15;
         }
 
@@ -239,8 +240,7 @@ public class RecommendationEngine {
         };
     }
 
-    private int calculateTimeScore(Place place) {
-        int hour = LocalTime.now().getHour();
+    private int calculateTimeScore(Place place, int hour) {
         int score = 60;
 
         // Restaurants score higher around meal times
@@ -280,27 +280,17 @@ public class RecommendationEngine {
         return score;
     }
 
-    private int calculateCongestionScore(Place place) {
-        // Mock congestion based on time of day and category
-        int hour = LocalTime.now().getHour();
-        int dayOfWeek = java.time.LocalDate.now().getDayOfWeek().getValue();
-        boolean isWeekend = dayOfWeek >= 6;
+    private int calculateCongestionScore(Place place, int congestionLevel) {
+        // congestionLevel comes from ContextEngine (0~100, 높을수록 혼잡)
+        int baseCongestion = congestionLevel;
 
-        int congestion = 50; // base: moderate
-
-        // Peak hours
-        if ((hour >= 12 && hour <= 13) || (hour >= 18 && hour <= 19)) {
-            congestion += 20;
-        }
-        if (isWeekend) congestion += 15;
-
-        // Popular categories are more congested
-        if ("restaurant".equals(place.getCategory()) && hour >= 12 && hour <= 13) {
-            congestion += 10;
+        // Popular categories get additional congestion penalty
+        if ("restaurant".equals(place.getCategory()) && congestionLevel > 60) {
+            baseCongestion += 10;
         }
 
         // Score inversely: less congestion = higher score
-        return Math.max(0, Math.min(100, 100 - congestion));
+        return Math.max(0, Math.min(100, 100 - baseCongestion));
     }
 
     private String generateReasonText(Place place, Element neededElement, String mood, int sajuScore, int moodScore) {

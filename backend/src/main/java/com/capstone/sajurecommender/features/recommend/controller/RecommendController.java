@@ -4,10 +4,10 @@ import com.capstone.sajurecommender.common.dto.ApiResponse;
 import com.capstone.sajurecommender.features.recommend.dto.RecommendRequest;
 import com.capstone.sajurecommender.features.recommend.dto.RecommendResponse;
 import com.capstone.sajurecommender.features.recommend.dto.RecommendResponse.*;
+import com.capstone.sajurecommender.features.recommend.service.ContextEngine;
+import com.capstone.sajurecommender.features.recommend.service.ContextEngine.ContextVector;
 import com.capstone.sajurecommender.features.recommend.service.RecommendationEngine;
 import com.capstone.sajurecommender.features.saju.domain.FourPillars;
-import com.capstone.sajurecommender.features.saju.domain.SajuConstants.Element;
-import com.capstone.sajurecommender.features.saju.service.SajuAnalyzer;
 import com.capstone.sajurecommender.features.saju.service.SajuCalculator;
 import com.capstone.sajurecommender.features.weather.dto.WeatherResponse;
 import com.capstone.sajurecommender.features.weather.service.WeatherService;
@@ -18,9 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 
 @Slf4j
@@ -31,7 +29,7 @@ import java.util.List;
 public class RecommendController {
 
     private final SajuCalculator sajuCalculator;
-    private final SajuAnalyzer sajuAnalyzer;
+    private final ContextEngine contextEngine;
     private final WeatherService weatherService;
     private final RecommendationEngine recommendationEngine;
 
@@ -52,16 +50,13 @@ public class RecommendController {
         // 2. Get weather
         WeatherResponse weather = weatherService.getCurrentWeather(request.getLat(), request.getLon());
 
-        // 3. Generate recommendations
+        // 3. Build context via ContextEngine
+        ContextVector ctx = contextEngine.buildContext(pillars, request.getMood(), weather);
+
+        // 4. Generate recommendations
         List<PlaceRecommendation> recommendations = recommendationEngine.recommend(
                 pillars, request.getMood(), weather, request.getCategory(), 10
         );
-
-        // 4. Build context summary
-        Element neededElement = sajuAnalyzer.getNeededElement(pillars);
-        int fortuneScore = sajuAnalyzer.calculateDailyFortune(pillars, LocalDate.now());
-
-        String timeOfDay = getTimeOfDay(LocalTime.now().getHour());
 
         RecommendResponse response = RecommendResponse.builder()
                 .mood(request.getMood())
@@ -75,24 +70,14 @@ public class RecommendController {
                         .build())
                 .recommendations(recommendations)
                 .contextSummary(ContextSummary.builder()
-                        .neededElement(neededElement.getKorean())
-                        .neededElementColor(neededElement.getColor())
-                        .weatherElement(weather.getElementMapping())
-                        .timeOfDay(timeOfDay)
-                        .fortuneScore(fortuneScore)
+                        .neededElement(ctx.neededElement().getKorean())
+                        .neededElementColor(ctx.neededElement().getColor())
+                        .weatherElement(ctx.weatherElementKorean())
+                        .timeOfDay(ctx.timeOfDay())
+                        .fortuneScore(ctx.fortuneScore())
                         .build())
                 .build();
 
         return ApiResponse.ok(response);
-    }
-
-    private String getTimeOfDay(int hour) {
-        if (hour >= 5 && hour < 9) return "이른 아침";
-        if (hour >= 9 && hour < 12) return "오전";
-        if (hour >= 12 && hour < 14) return "점심";
-        if (hour >= 14 && hour < 17) return "오후";
-        if (hour >= 17 && hour < 20) return "저녁";
-        if (hour >= 20 && hour < 23) return "밤";
-        return "심야";
     }
 }
