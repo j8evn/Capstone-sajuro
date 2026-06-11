@@ -37,5 +37,13 @@ public class SajuRequest {
     @Builder.Default
     private String calendarType = "solar"; // solar or lunar
 
+    @Builder.Default
+    private boolean leapMonth = false; // 윤달 여부 (음력 입력 시에만 사용)
+
     private String gender; // male or female
+
+    public boolean isLunar() {
+        return "lunar".equalsIgnoreCase(calendarType);
+    }
 }
+
