@@ -258,6 +258,11 @@ body {
   padding-right: 36px;
 }
 
+.form-select option {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
